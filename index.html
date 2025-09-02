@@ -8,6 +8,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" type="module"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" type="module"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" type="module"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     :root{
@@ -30,6 +31,7 @@
     button.ghost{background:transparent;border:1px solid #d1d5db;padding:var(--btn-pad);border-radius:12px;font-size:var(--btn-font);cursor:pointer}
     .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
     .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .grid-report{display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:14px;}
     .row{display:flex;gap:10px;align-items:center}
     .hidden{display:none!important}
     table{width:100%;border-collapse:collapse;margin-top:12px}
@@ -149,6 +151,7 @@
           <div style="flex:1"></div>
           <div style="color:#5f6b7a">إجمالي مبيعات اليوم: <span id="dayRevenue">0</span></div>
           <div style="color:#5f6b7a">إجمالي عدد الأصناف المباعة: <span id="daySoldQty">0</span></div>
+          <div style="color:#5f6b7a">الإيراد بعد خصم الاهلاك 5%: <span id="revenueAfterLoss">0</span></div>
         </div>
         <div id="salesFilters" class="row hidden" style="flex-wrap:wrap;margin-top:10px">
           <div><label>فلترة حسب التاريخ</label><input type="date" id="filterSalesDate"></div>
@@ -176,11 +179,18 @@
             </div>
           </div>
         </div>
-        <div class="grid" style="margin-top:12px">
+        <div class="grid-report" style="margin-top:12px">
           <div class="card"><div style="color:#5f6b7a">إجمالي التكلفة (مشتريات)</div><div id="sumCost" style="font-weight:700;font-size:22px">0</div></div>
           <div class="card"><div style="color:#5f6b7a">إجمالي الإيرادات (مبيعات)</div><div id="sumRevenue" style="font-weight:700;font-size:22px">0</div></div>
           <div class="card"><div style="color:#5f6b7a">صافي الربح</div><div id="sumProfit" style="font-weight:700;font-size:22px">0</div></div>
+          <div class="card"><div style="color:#5f6b7a">إجمالي عدد الأصناف المباعة</div><div id="reportSoldQty" style="font-weight:700;font-size:22px">0</div></div>
+          <div class="card"><div style="color:#5f6b7a">الإيراد بعد خصم الاهلاك 5%</div><div id="reportRevenueAfterLoss" style="font-weight:700;font-size:22px">0</div></div>
         </div>
+        
+        <div style="margin-top:24px;">
+            <canvas id="reportsChart"></canvas>
+        </div>
+
         <table id="reportPurchaseTable" style="margin-top:12px">
           <thead><tr><th colspan="7">المشتريات لليوم المحدد</th></tr><tr><th>التاريخ</th><th>الصنف</th><th>الكمية</th><th>تكلفة/وحدة</th><th>بيع/وحدة</th><th>إجمالي التكلفة</th><th>ملاحظات</th></tr></thead>
           <tbody></tbody>
@@ -309,11 +319,115 @@
     document.getElementById('btnToggleSalesTable').addEventListener('click', ()=>{ document.getElementById('salesTable').classList.toggle('hidden'); document.getElementById('salesFilters').classList.toggle('hidden'); loadSalesTable(); });
     document.getElementById('btnApplySalesFilters').addEventListener('click', ()=> loadSalesTable());
     document.getElementById('btnResetSalesFilters').addEventListener('click', ()=>{ document.getElementById('filterSalesDate').value=''; document.getElementById('filterSalesItem').value='الكل'; loadSalesTable(); });
-    async function loadSalesTable(){ const tbody=document.querySelector('#salesTable tbody'); tbody.innerHTML=''; if(!auth.currentUser) return; const snap=await getDocs(query(salesCol(), orderBy('date','desc'))); let sum=0; let totalSoldQty = 0; const fDate=document.getElementById('filterSalesDate')?.value||''; const fItem=document.getElementById('filterSalesItem')?.value||'الكل'; snap.forEach(d=>{ const x=d.data(); if(fDate && x.date!==fDate) return; if(fItem!=='الكل' && x.item!==fItem) return; const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`; tbody.appendChild(tr); sum+=Number(x.revenue||0); totalSoldQty += Number(x.qty || 0); }); document.getElementById('dayRevenue').textContent=fmt(sum); document.getElementById('daySoldQty').textContent=fmt(totalSoldQty); if(!tbody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td class=\"muted\" colspan=\"6\">لا توجد بيانات مطابقة</td>`; tbody.appendChild(tr); } }
+    async function loadSalesTable(){
+        const tbody=document.querySelector('#salesTable tbody'); tbody.innerHTML=''; if(!auth.currentUser) return;
+        const snap=await getDocs(query(salesCol(), orderBy('date','desc')));
+        let sum=0;
+        let totalSoldQty = 0;
+        const fDate=document.getElementById('filterSalesDate')?.value||'';
+        const fItem=document.getElementById('filterSalesItem')?.value||'الكل';
+        snap.forEach(d=>{
+            const x=d.data();
+            if(fDate && x.date!==fDate) return;
+            if(fItem!=='الكل' && x.item!==fItem) return;
+            const tr=document.createElement('tr');
+            tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`;
+            tbody.appendChild(tr);
+            sum+=Number(x.revenue||0);
+            totalSoldQty += Number(x.qty || 0);
+        });
+        const revenueAfterLoss = sum - (sum * 0.05);
+        document.getElementById('dayRevenue').textContent=fmt(sum);
+        document.getElementById('daySoldQty').textContent=fmt(totalSoldQty);
+        document.getElementById('revenueAfterLoss').textContent=fmt(revenueAfterLoss);
+        if(!tbody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td class=\"muted\" colspan=\"6\">لا توجد بيانات مطابقة</td>`; tbody.appendChild(tr); }
+    }
 
     // Reports (single day view)
     document.getElementById('btnRefreshReports').addEventListener('click', refreshReports);
-    async function refreshReports(){ if(!auth.currentUser) return; const day=document.getElementById('reportDate').value; const pSnap=await getDocs(query(purchasesCol(), where('date','==',day))); const sSnap=await getDocs(query(salesCol(), where('date','==',day))); let sumCost=0,sumRevenue=0,sumProfit=0; const pBody=document.querySelector('#reportPurchaseTable tbody'); const sBody=document.querySelector('#reportSalesTable tbody'); pBody.innerHTML=''; sBody.innerHTML=''; pSnap.forEach(d=>{ const x=d.data(); const tot=Number(x.qty||0)*Number(x.cost||0); sumCost+=tot; const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.cost)}</td><td>${fmt(x.price)}</td><td>${fmt(tot)}</td><td>${x.note||''}</td>`; pBody.appendChild(tr); }); sSnap.forEach(d=>{ const x=d.data(); sumRevenue+=Number(x.revenue||0); sumProfit+=Number(x.profit||0); const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`; sBody.appendChild(tr); }); if(!pBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="7" style="color:#5f6b7a">لا توجد مشتريات في هذا اليوم</td>`; pBody.appendChild(tr);} if(!sBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="6" style="color:#5f6b7a">لا توجد مبيعات في هذا اليوم</td>`; sBody.appendChild(tr);} document.getElementById('sumCost').textContent=fmt(sumCost); document.getElementById('sumRevenue').textContent=fmt(sumRevenue); document.getElementById('sumProfit').textContent=fmt(sumProfit); }
+    let reportsChart = null;
+    async function refreshReports(){
+        if(!auth.currentUser) return;
+        const day=document.getElementById('reportDate').value;
+        const pSnap=await getDocs(query(purchasesCol(), where('date','==',day)));
+        const sSnap=await getDocs(query(salesCol(), where('date','==',day)));
+        let sumCost=0,sumRevenue=0,sumProfit=0, totalSoldQty=0;
+        const pBody=document.querySelector('#reportPurchaseTable tbody');
+        const sBody=document.querySelector('#reportSalesTable tbody');
+        pBody.innerHTML='';
+        sBody.innerHTML='';
+        pSnap.forEach(d=>{
+            const x=d.data();
+            const tot=Number(x.qty||0)*Number(x.cost||0);
+            sumCost+=tot;
+            const tr=document.createElement('tr');
+            tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.cost)}</td><td>${fmt(x.price)}</td><td>${fmt(tot)}</td><td>${x.note||''}</td>`;
+            pBody.appendChild(tr);
+        });
+        sSnap.forEach(d=>{
+            const x=d.data();
+            sumRevenue+=Number(x.revenue||0);
+            sumProfit+=Number(x.profit||0);
+            totalSoldQty+=Number(x.qty||0);
+            const tr=document.createElement('tr');
+            tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`;
+            sBody.appendChild(tr);
+        });
+        if(!pBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="7" style="color:#5f6b7a">لا توجد مشتريات في هذا اليوم</td>`; pBody.appendChild(tr);}
+        if(!sBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="6" style="color:#5f6b7a">لا توجد مبيعات في هذا اليوم</td>`; sBody.appendChild(tr);}
+
+        const revenueAfterLoss = sumRevenue - (sumRevenue * 0.05);
+
+        document.getElementById('sumCost').textContent=fmt(sumCost);
+        document.getElementById('sumRevenue').textContent=fmt(sumRevenue);
+        document.getElementById('sumProfit').textContent=fmt(sumProfit);
+        document.getElementById('reportSoldQty').textContent=fmt(totalSoldQty);
+        document.getElementById('reportRevenueAfterLoss').textContent=fmt(revenueAfterLoss);
+
+        // Chart.js
+        const ctx = document.getElementById('reportsChart').getContext('2d');
+        if (reportsChart) {
+            reportsChart.destroy();
+        }
+        reportsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['إجمالي التكلفة', 'إجمالي الإيرادات', 'صافي الربح', 'إيرادات بعد الاهلاك', 'إجمالي الأصناف المباعة'],
+                datasets: [{
+                    label: 'التقرير اليومي',
+                    data: [sumCost, sumRevenue, sumProfit, revenueAfterLoss, totalSoldQty],
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.5)',
+                        'rgba(54, 162, 235, 0.5)',
+                        'rgba(75, 192, 192, 0.5)',
+                        'rgba(153, 102, 255, 0.5)',
+                        'rgba(255, 159, 64, 0.5)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
 
     // Data Deletion Functionality
     document.getElementById('btnDeleteData').addEventListener('click', async () => {
