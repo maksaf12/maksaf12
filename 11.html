@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>نظام متابعة مقصف مدرسة</title>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js" type="module"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js" type="module"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js" type="module"></script>
+
+  <style>
+    :root{
+      --brand:#2D5D55; /* اللون المطلوب للشريط */
+      --field-font:18px; --field-pad:14px; --btn-font:18px; --btn-pad:14px 22px;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Tahoma, Arial, system-ui;background:#F5F6F3;color:#0a2342}
+    header{background:var(--brand);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    header h1{margin:0;font-size:20px}
+    header #dateNice{color:#fff}
+    .container{max-width:1200px;margin:24px auto;padding:14px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 8px 24px rgba(2,6,23,.10);padding:18px;margin-bottom:16px}
+    nav.tabs{display:flex;gap:10px;flex-wrap:wrap}
+    nav.tabs button{background:transparent;border:1px solid #d9e0e7;padding:12px 16px;border-radius:14px;cursor:pointer;font-size:17px;color:var(--brand)}
+    nav.tabs button.active{background:var(--brand);color:#fff}
+    label{display:block;font-size:15px;color:#5f6b7a;margin-bottom:6px}
+    input[type=text],input[type=password],input[type=number],input[type=date],select,textarea{width:100%;padding:var(--field-pad);border-radius:12px;border:1px solid #e3e7ea;background:#fff;font-size:var(--field-font)}
+    button.primary{background:#2563eb;color:#fff;border:none;padding:var(--btn-pad);border-radius:12px;font-size:var(--btn-font);cursor:pointer}
+    button.ghost{background:transparent;border:1px solid #d1d5db;padding:var(--btn-pad);border-radius:12px;font-size:var(--btn-font);cursor:pointer}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .row{display:flex;gap:10px;align-items:center}
+    .hidden{display:none!important}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px;border-bottom:1px solid #eef2f6;text-align:center}
+    th{background:var(--brand);color:#fff}
+    .auth-actions{display:flex;gap:14px;justify-content:center;margin-top:18px}
+    @media (max-width:900px){.grid,.grid-3{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="schoolBar">نظام متابعة مقصف مدرسة</h1>
+    <div class="row">
+      <div id="dateNice"></div>
+      
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="authCard" class="card">
+      <div class="grid">
+        <div>
+          <label>البريد الإلكتروني</label>
+          <input id="email" type="text" placeholder="name@example.com" />
+        </div>
+        <div>
+          <label>كلمة المرور</label>
+          <input id="password" type="password" placeholder="••••••••" />
+        </div>
+        <div>
+          <label>اسم المدرسة</label>
+          <input id="schoolName" type="text" placeholder="مثال: ثانوية القدس" />
+        </div>
+      </div>
+      <div class="auth-actions">
+        <button id="btnLogin" class="primary">دخول</button>
+        <button id="btnSignup" class="ghost">تسجيل جديد</button>
+      </div>
+    </div>
+
+    <div id="appUI" class="hidden">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <nav class="tabs" id="mainTabs">
+            <button data-page="purchases" class="active">المشتريات اليومية</button>
+            <button data-page="sales">المبيعات اليومية</button>
+            <button data-page="reports">التقارير</button>
+          </nav>
+          <div class="row" style="font-size:16px">
+            <div id="signedAs" style="color:#5f6b7a"></div>
+            <button id="btnLogout" class="ghost">تسجيل خروج</button>
+          </div>
+        </div>
+      </div>
+
+      <section id="purchases" class="card">
+        <h3 style="margin-top:0">🛒 المشتريات اليومية</h3>
+        <div class="grid">
+          <div><label>التاريخ</label><input type="date" id="purchaseDate"></div>
+          <div><label>اليوم</label><input type="text" id="purchaseDay" disabled></div>
+          <div><label>الصنف</label>
+            <select id="purchaseItem"><option>ماء</option><option>عصير</option><option>فطاير</option></select>
+          </div>
+          <div><label>العدد</label><input type="number" id="purchaseQty" min="1" value="1"></div>
+          <div><label>سعر التكلفة للوحدة</label><input type="number" id="purchaseCost" min="0" step="0.01" value="0"></div>
+          <div><label>سعر البيع للوحدة</label><input type="number" id="purchasePrice" min="0" step="0.01" value="0"></div>
+        </div>
+        <label>ملاحظات</label><textarea id="purchaseNote" rows="2"></textarea>
+        <div class="row" style="margin-top:12px">
+          <button id="btnAddPurchase" class="primary">حفظ المشتريات</button>
+          
+          <button id="btnTogglePurchaseTable" class="ghost">استعراض المشتريات</button>
+          <div style="flex:1"></div>
+          <div style="color:#5f6b7a">المخزون المتاح اليوم: <span id="totalInventory">0</span></div>
+        </div>
+        <div id="purchaseFilters" class="row hidden" style="flex-wrap:wrap;margin-top:10px">
+          <div><label>فلترة حسب التاريخ</label><input type="date" id="filterPurchaseDate"></div>
+          <div><label>فلترة حسب الصنف</label>
+            <select id="filterPurchaseItem"><option value="الكل">الكل</option><option>ماء</option><option>عصير</option><option>فطاير</option></select>
+          </div>
+          <div class="row"><button id="btnApplyPurchaseFilters" class="primary">تطبيق الفلتر</button><button id="btnResetPurchaseFilters" class="ghost">إظهار الكل</button></div>
+        </div>
+        <table id="purchaseTable" class="hidden">
+          <thead><tr><th>التاريخ</th><th>الصنف</th><th>العدد</th><th>تكلفة/وحدة</th><th>بيع/وحدة</th><th>إجمالي التكلفة</th><th>ملاحظات</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="sales" class="card hidden">
+        <h3 style="margin-top:0">💰 المبيعات اليومية</h3>
+        <div class="grid">
+          <div><label>التاريخ</label><input type="date" id="saleDate"></div>
+          <div><label>اليوم</label><input type="text" id="saleDay" disabled></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <div class="grid-3">
+            <div>
+              <div style="color:#5f6b7a;margin-bottom:8px">ماء — متوفر: <strong id="avail-water">0</strong> | سعر بيع: <strong id="price-water">—</strong> | تكلفة: <strong id="cost-water">—</strong></div>
+              <label>الكمية المباعة (ماء)</label><input type="number" id="qty-water" min="0" value="0">
+            </div>
+            <div>
+              <div style="color:#5f6b7a;margin-bottom:8px">عصير — متوفر: <strong id="avail-juice">0</strong> | سعر بيع: <strong id="price-juice">—</strong> | تكلفة: <strong id="cost-juice">—</strong></div>
+              <label>الكمية المباعة (عصير)</label><input type="number" id="qty-juice" min="0" value="0">
+            </div>
+            <div>
+              <div style="color:#5f6b7a;margin-bottom:8px">فطاير — متوفر: <strong id="avail-pie">0</strong> | سعر بيع: <strong id="price-pie">—</strong> | تكلفة: <strong id="cost-pie">—</strong></div>
+              <label>الكمية المباعة (فطاير)</label><input type="number" id="qty-pie" min="0" value="0">
+            </div>
+          </div>
+        </div>
+        
+        <label>ملاحظات</label><textarea id="saleNote" rows="2"></textarea>
+        <div class="row" style="margin-top:12px">
+          <button id="btnAddSale" class="primary">تسجيل البيع</button>
+          
+          <button id="btnToggleSalesTable" class="ghost">استعراض المبيعات</button>
+          <div style="flex:1"></div>
+          <div style="color:#5f6b7a">إجمالي مبيعات اليوم: <span id="dayRevenue">0</span></div>
+          <div style="color:#5f6b7a">إجمالي عدد الأصناف المباعة: <span id="daySoldQty">0</span></div>
+        </div>
+        <div id="salesFilters" class="row hidden" style="flex-wrap:wrap;margin-top:10px">
+          <div><label>فلترة حسب التاريخ</label><input type="date" id="filterSalesDate"></div>
+          <div><label>فلترة حسب الصنف</label>
+            <select id="filterSalesItem"><option value="الكل">الكل</option><option>ماء</option><option>عصير</option><option>فطاير</option></select>
+          </div>
+          <div class="row"><button id="btnApplySalesFilters" class="primary">تطبيق الفلتر</button><button id="btnResetSalesFilters" class="ghost">إظهار الكل</button></div>
+        </div>
+        <table id="salesTable" class="hidden">
+          <thead><tr><th>التاريخ</th><th>الصنف</th><th>الكمية</th><th>الإيراد</th><th>الأرباح</th><th>ملاحظات</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section id="reports" class="card hidden">
+        <h3 style="margin-top:0">📈 التقارير</h3>
+        <div class="grid">
+          <div>
+            <label>تاريخ التقرير (يوم واحد)</label>
+            <input type="date" id="reportDate">
+          </div>
+          <div style="align-self:end">
+            <div class="row">
+              <button id="btnRefreshReports" class="primary">تحديث</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <div class="card"><div style="color:#5f6b7a">إجمالي التكلفة (مشتريات)</div><div id="sumCost" style="font-weight:700;font-size:22px">0</div></div>
+          <div class="card"><div style="color:#5f6b7a">إجمالي الإيرادات (مبيعات)</div><div id="sumRevenue" style="font-weight:700;font-size:22px">0</div></div>
+          <div class="card"><div style="color:#5f6b7a">صافي الربح</div><div id="sumProfit" style="font-weight:700;font-size:22px">0</div></div>
+        </div>
+        <table id="reportPurchaseTable" style="margin-top:12px">
+          <thead><tr><th colspan="7">المشتريات لليوم المحدد</th></tr><tr><th>التاريخ</th><th>الصنف</th><th>الكمية</th><th>تكلفة/وحدة</th><th>بيع/وحدة</th><th>إجمالي التكلفة</th><th>ملاحظات</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <table id="reportSalesTable" style="margin-top:12px">
+          <thead><tr><th colspan="6">المبيعات لليوم المحدد</th></tr><tr><th>التاريخ</th><th>الصنف</th><th>الكمية</th><th>الإيراد</th><th>الربح</th><th>ملاحظات</th></tr></thead>
+          <tbody></tbody>
+        </table>
+
+        <hr>
+        <div class="row" style="justify-content:space-between;align-items:center; margin-top: 24px;">
+            <div class="row">
+                <label for="deleteDate">حذف البيانات بناءً على تاريخ:</label>
+                <input type="date" id="deleteDate" style="width: auto;">
+            </div>
+            <button id="btnDeleteData" class="primary" style="background-color: #dc2626; padding: 10px 16px; font-size: 16px;">حذف البيانات</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, where, orderBy, getDocs, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyA1kqqJ1LgkFe9OZR-5ZepjU_x7Qa6TwNI",
+      authDomain: "sales-follow-up-cf06d.firebaseapp.com",
+      projectId: "sales-follow-up-cf06d",
+      storageBucket: "sales-follow-up-cf06d.firebasestorage.app",
+      messagingSenderId: "888690138424",
+      appId: "1:888690138424:web:7cb8274b840e0f7d31b5cd",
+      measurementId: "G-K270SL5FPW"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const $ = s=>document.querySelector(s);
+    const fmt = n => Number(n||0).toLocaleString('ar-EG',{maximumFractionDigits:2});
+
+    // تاريخ وأيام
+    const toISO = d => d.toISOString().slice(0,10);
+    const today = new Date();
+    $('#dateNice').textContent = new Intl.DateTimeFormat('ar-SA',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(today);
+    ['purchaseDate','saleDate','reportDate'].forEach(id=>{ const el=$('#'+id); if(el) el.value = toISO(new Date()); });
+    ['purchaseDay','saleDay'].forEach(id=>{ const el=$('#'+id); if(el) el.value = new Intl.DateTimeFormat('ar-SA',{weekday:'long'}).format(new Date()); });
+    $('#purchaseDate')?.addEventListener('change',()=> $('#purchaseDay').value = new Intl.DateTimeFormat('ar-SA',{weekday:'long'}).format(new Date($('#purchaseDate').value)));
+    $('#saleDate')?.addEventListener('change',()=> $('#saleDay').value = new Intl.DateTimeFormat('ar-SA',{weekday:'long'}).format(new Date($('#saleDate').value)));
+    $('#deleteDate')?.addEventListener('change', () => {
+        if ($('#deleteDate').value === '') {
+            $('#btnDeleteData').textContent = 'حذف كل البيانات';
+        } else {
+            $('#btnDeleteData').textContent = 'حذف البيانات';
+        }
+    });
+
+    // اسم المدرسة محفوظ محليًا حسب البريد
+    const emailInput = $('#email');
+    const schoolInput = $('#schoolName');
+    function setSchoolHeader(name){ const s = name && name.trim()? `نظام متابعة مقصف مدرسة — ${name}` : 'نظام متابعة مقصف مدرسة'; $('#schoolBar').textContent = s; document.title=s; }
+    emailInput?.addEventListener('input', ()=>{ const e=emailInput.value.trim().toLowerCase(); const saved=localStorage.getItem(`schoolByEmail:${e}`)||''; if(saved){ schoolInput.value=saved; setSchoolHeader(saved); } });
+    function saveSchoolForEmail(){ const e=emailInput.value.trim().toLowerCase(); const s=schoolInput.value.trim(); if(e && s){ localStorage.setItem(`schoolByEmail:${e}`,s); setSchoolHeader(s); } }
+
+    // دخول/تسجيل
+    $('#btnLogin').addEventListener('click', async ()=>{ const email=$('#email').value.trim(); const pass=$('#password').value; saveSchoolForEmail(); if(!email||!pass) return alert('أدخل البريد وكلمة المرور'); try{ await signInWithEmailAndPassword(auth,email,pass);}catch(e){ alert('خطأ في تسجيل الدخول: '+e.message);} });
+    $('#btnSignup').addEventListener('click', async ()=>{ const email=$('#email').value.trim(); const pass=$('#password').value; saveSchoolForEmail(); if(!email||pass.length<6) return alert('بريد صحيح + كلمة مرور 6 أحرف على الأقل'); try{ await createUserWithEmailAndPassword(auth,email,pass); alert('تم إنشاء الحساب✅');}catch(e){ alert('فشل إنشاء الحساب: '+e.message);} });
+    $('#btnLogout').addEventListener('click', ()=> signOut(auth));
+
+    onAuthStateChanged(auth, user=>{
+      if(user){
+        $('#authCard').classList.add('hidden'); $('#appUI').classList.remove('hidden');
+        const email=user.email||''; const saved=localStorage.getItem(`schoolByEmail:${email.toLowerCase()}`)||''; setSchoolHeader(saved); $('#signedAs').textContent=email;
+        refreshAll();
+      }else{
+        $('#authCard').classList.remove('hidden'); $('#appUI').classList.add('hidden'); setSchoolHeader(''); $('#signedAs').textContent='';
+      }
+    });
+
+    // Collections
+    const purchasesCol = ()=> collection(db,'users',auth.currentUser.uid,'purchases');
+    const salesCol = ()=> collection(db,'users',auth.currentUser.uid,'sales');
+
+    // Purchases save
+    $('#btnAddPurchase').addEventListener('click', async ()=>{
+      const date=$('#purchaseDate').value; const item=$('#purchaseItem').value; const qty=Number($('#purchaseQty').value||0); const cost=Number($('#purchaseCost').value||0); const price=Number($('#purchasePrice').value||0); const note=$('#purchaseNote').value.trim();
+      if(!date||!item||qty<=0||price<=0) return alert('راجع تاريخ/صنف/كمية/سعر البيع');
+      try{ await addDoc(purchasesCol(),{date,item,qty,cost,price,note,createdAt:serverTimestamp()}); await loadPurchasesTable(); await buildInventoryForDate(); alert('تم حفظ المشتريات ✅'); }catch(e){ alert('خطأ في الحفظ: '+e.message);} 
+    });
+
+    // Purchases filters + table
+    document.getElementById('btnTogglePurchaseTable').addEventListener('click', ()=>{ document.getElementById('purchaseTable').classList.toggle('hidden'); document.getElementById('purchaseFilters').classList.toggle('hidden'); loadPurchasesTable(); });
+    document.getElementById('btnApplyPurchaseFilters').addEventListener('click', ()=> loadPurchasesTable());
+    document.getElementById('btnResetPurchaseFilters').addEventListener('click', ()=>{ $('#filterPurchaseDate').value=''; $('#filterPurchaseItem').value='الكل'; loadPurchasesTable(); });
+
+    async function loadPurchasesTable(){
+      const tbody=document.querySelector('#purchaseTable tbody'); tbody.innerHTML=''; if(!auth.currentUser) return;
+      const snap=await getDocs(query(purchasesCol(), orderBy('date','desc')));
+      let totalInventory=0; const fDate=$('#filterPurchaseDate')?.value||''; const fItem=$('#filterPurchaseItem')?.value||'الكل';
+      snap.forEach(d=>{ const x=d.data(); if(fDate && x.date!==fDate) return; if(fItem!=='الكل' && x.item!==fItem) return; const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.cost)}</td><td>${fmt(x.price)}</td><td>${fmt(x.qty*x.cost)}</td><td>${x.note||''}</td>`; tbody.appendChild(tr); totalInventory+=Number(x.qty||0); });
+      document.getElementById('totalInventory').textContent=fmt(totalInventory);
+      if(!tbody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td class="muted" colspan="7">لا توجد بيانات مطابقة</td>`; tbody.appendChild(tr); }
+    }
+
+    // Sales stock
+    let todayStock={"ماء":{qty:0,cost:0,price:0},"عصير":{qty:0,cost:0,price:0},"فطاير":{qty:0,cost:0,price:0}};
+    async function buildInventoryForDate(){ if(!auth.currentUser) return; const date=$('#saleDate').value; const pSnap=await getDocs(query(purchasesCol(), where('date','==',date))); const map=new Map(); pSnap.forEach(s=>{ const d=s.data(); if(!map.has(d.item)) map.set(d.item,{qty:0,cost:d.cost,price:d.price}); const r=map.get(d.item); r.qty+=Number(d.qty||0); r.cost=d.cost; r.price=d.price; }); const sSnap=await getDocs(query(salesCol(), where('date','==',date))); sSnap.forEach(s=>{ const x=s.data(); if(map.has(x.item)) map.get(x.item).qty -= Number(x.qty||0); }); ["ماء","عصير","فطاير"].forEach(k=>{ const v=map.get(k)||{qty:0,cost:0,price:0}; todayStock[k]=v; }); document.getElementById('avail-water').textContent=fmt(todayStock['ماء'].qty); document.getElementById('price-water').textContent=fmt(todayStock['ماء'].price); document.getElementById('cost-water').textContent=fmt(todayStock['ماء'].cost); document.getElementById('avail-juice').textContent=fmt(todayStock['عصير'].qty); document.getElementById('price-juice').textContent=fmt(todayStock['عصير'].price); document.getElementById('cost-juice').textContent=fmt(todayStock['عصير'].cost); document.getElementById('avail-pie').textContent=fmt(todayStock['فطاير'].qty); document.getElementById('price-pie').textContent=fmt(todayStock['فطاير'].price); document.getElementById('cost-pie').textContent=fmt(todayStock['فطاير'].cost); }
+    document.getElementById('saleDate').addEventListener('change', ()=>{ document.getElementById('saleDay').value = new Intl.DateTimeFormat('ar-SA',{weekday:'long'}).format(new Date(document.getElementById('saleDate').value)); buildInventoryForDate(); loadSalesTable(); });
+
+    // Add sale
+    document.getElementById('btnAddSale').addEventListener('click', async ()=>{
+      const date=$('#saleDate').value; const note=$('#saleNote').value.trim(); 
+      const entries=[{item:'ماء',qty:Number($('#qty-water').value||0)},{item:'عصير',qty:Number($('#qty-juice').value||0)},{item:'فطاير',qty:Number($('#qty-pie').value||0)}].filter(e=>e.qty>0);
+      if(!date||!entries.length) return alert('أدخل التاريخ وكميات مباعة');
+      for(const e of entries){ const st=todayStock[e.item]||{qty:0}; if(e.qty>Number(st.qty||0)) return alert(`الكمية المطلوبة لصنف "${e.item}" تتجاوز المتوفر (${st.qty})`); }
+      const totals=entries.map(e=>{ const st=todayStock[e.item]; const revenue=e.qty*Number(st.price||0); return {...e, unitPrice:Number(st.price||0), unitCost:Number(st.cost||0), revenue}; });
+      const totalRevenue=totals.reduce((a,b)=>a+b.revenue,0);
+      const lossTotal=totalRevenue*0.05;
+      try{ for(const t of totals){ const shareLoss= totalRevenue>0 ? (lossTotal*(t.revenue/totalRevenue)) : 0; const profit=(t.revenue - shareLoss) - (t.qty*t.unitCost); await addDoc(salesCol(),{date,item:t.item,qty:t.qty,revenue:t.revenue,profit,unitPrice:t.unitPrice,unitCost:t.unitCost,loss:shareLoss,note,createdAt:serverTimestamp()}); }
+        await loadSalesTable(); await buildInventoryForDate(); alert('تم تسجيل البيع ✅'); }catch(e){ alert('خطأ في تسجيل البيع: '+e.message); }
+    });
+
+    // Sales table + filters
+    document.getElementById('btnToggleSalesTable').addEventListener('click', ()=>{ document.getElementById('salesTable').classList.toggle('hidden'); document.getElementById('salesFilters').classList.toggle('hidden'); loadSalesTable(); });
+    document.getElementById('btnApplySalesFilters').addEventListener('click', ()=> loadSalesTable());
+    document.getElementById('btnResetSalesFilters').addEventListener('click', ()=>{ document.getElementById('filterSalesDate').value=''; document.getElementById('filterSalesItem').value='الكل'; loadSalesTable(); });
+    async function loadSalesTable(){ const tbody=document.querySelector('#salesTable tbody'); tbody.innerHTML=''; if(!auth.currentUser) return; const snap=await getDocs(query(salesCol(), orderBy('date','desc'))); let sum=0; let totalSoldQty = 0; const fDate=document.getElementById('filterSalesDate')?.value||''; const fItem=document.getElementById('filterSalesItem')?.value||'الكل'; snap.forEach(d=>{ const x=d.data(); if(fDate && x.date!==fDate) return; if(fItem!=='الكل' && x.item!==fItem) return; const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`; tbody.appendChild(tr); sum+=Number(x.revenue||0); totalSoldQty += Number(x.qty || 0); }); document.getElementById('dayRevenue').textContent=fmt(sum); document.getElementById('daySoldQty').textContent=fmt(totalSoldQty); if(!tbody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td class=\"muted\" colspan=\"6\">لا توجد بيانات مطابقة</td>`; tbody.appendChild(tr); } }
+
+    // Reports (single day view)
+    document.getElementById('btnRefreshReports').addEventListener('click', refreshReports);
+    async function refreshReports(){ if(!auth.currentUser) return; const day=document.getElementById('reportDate').value; const pSnap=await getDocs(query(purchasesCol(), where('date','==',day))); const sSnap=await getDocs(query(salesCol(), where('date','==',day))); let sumCost=0,sumRevenue=0,sumProfit=0; const pBody=document.querySelector('#reportPurchaseTable tbody'); const sBody=document.querySelector('#reportSalesTable tbody'); pBody.innerHTML=''; sBody.innerHTML=''; pSnap.forEach(d=>{ const x=d.data(); const tot=Number(x.qty||0)*Number(x.cost||0); sumCost+=tot; const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.cost)}</td><td>${fmt(x.price)}</td><td>${fmt(tot)}</td><td>${x.note||''}</td>`; pBody.appendChild(tr); }); sSnap.forEach(d=>{ const x=d.data(); sumRevenue+=Number(x.revenue||0); sumProfit+=Number(x.profit||0); const tr=document.createElement('tr'); tr.innerHTML=`<td>${x.date}</td><td>${x.item}</td><td>${fmt(x.qty)}</td><td>${fmt(x.revenue)}</td><td>${fmt(x.profit)}</td><td>${x.note||''}</td>`; sBody.appendChild(tr); }); if(!pBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="7" style="color:#5f6b7a">لا توجد مشتريات في هذا اليوم</td>`; pBody.appendChild(tr);} if(!sBody.children.length){ const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="6" style="color:#5f6b7a">لا توجد مبيعات في هذا اليوم</td>`; sBody.appendChild(tr);} document.getElementById('sumCost').textContent=fmt(sumCost); document.getElementById('sumRevenue').textContent=fmt(sumRevenue); document.getElementById('sumProfit').textContent=fmt(sumProfit); }
+
+    // Data Deletion Functionality
+    document.getElementById('btnDeleteData').addEventListener('click', async () => {
+        if (!auth.currentUser) {
+            return alert('سجّل الدخول أولاً');
+        }
+
+        const dateToDelete = document.getElementById('deleteDate').value;
+        let confirmationMessage = '';
+        let qPurchases, qSales;
+
+        if (dateToDelete) {
+            confirmationMessage = `هل أنت متأكد من حذف جميع بيانات المشتريات والمبيعات لتاريخ ${dateToDelete}؟ هذه العملية لا يمكن التراجع عنها.`;
+            qPurchases = query(purchasesCol(), where('date', '==', dateToDelete));
+            qSales = query(salesCol(), where('date', '==', dateToDelete));
+        } else {
+            confirmationMessage = 'هل أنت متأكد من حذف جميع بيانات المشتريات والمبيعات بالكامل؟ هذه العملية لا يمكن التراجع عنها.';
+            qPurchases = query(purchasesCol());
+            qSales = query(salesCol());
+        }
+
+        if (!confirm(confirmationMessage)) {
+            return;
+        }
+
+        try {
+            const purchasesSnapshot = await getDocs(qPurchases);
+            const salesSnapshot = await getDocs(qSales);
+
+            if (purchasesSnapshot.empty && salesSnapshot.empty) {
+                return alert('لا توجد بيانات للحذف.');
+            }
+
+            const deletePromises = [];
+
+            purchasesSnapshot.forEach(doc => {
+                deletePromises.push(deleteDoc(doc.ref));
+            });
+
+            salesSnapshot.forEach(doc => {
+                deletePromises.push(deleteDoc(doc.ref));
+            });
+
+            await Promise.all(deletePromises);
+            
+            alert('تم حذف البيانات بنجاح ✅');
+            refreshAll(); // Reload all tables
+        } catch (e) {
+            alert('فشل حذف البيانات: ' + e.message);
+        }
+    });
+
+    // Tabs
+    document.querySelectorAll('#mainTabs button').forEach(b=> b.addEventListener('click', ()=>{ document.querySelectorAll('#purchases,#sales,#reports').forEach(s=> s.classList.add('hidden')); document.getElementById(b.dataset.page).classList.remove('hidden'); document.querySelectorAll('#mainTabs button').forEach(x=> x.classList.remove('active')); b.classList.add('active'); if(b.dataset.page==='purchases') loadPurchasesTable(); if(b.dataset.page==='sales'){ buildInventoryForDate(); loadSalesTable(); } if(b.dataset.page==='reports') refreshReports(); }));
+
+    async function refreshAll(){ await loadPurchasesTable(); await buildInventoryForDate(); await loadSalesTable(); await refreshReports(); }
+  </script>
+</body>
+</html>
